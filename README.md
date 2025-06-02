@@ -17,12 +17,12 @@ Effectué avec succès.
 ### a. Récupération de l'image nginx
 
 ```bash
-$ git branch image_nginx
-$ git checkout image_nginx
+$ git branch TP1
+$ git checkout TP1
 $ docker pull nginx
 $ git add .
 $ git commit -m "Étape 3.a : Récupération de l'image nginx depuis Docker Hub"
-$ git push origin image_nginx
+$ git push origin TP1
 ```
 
 ### b. Vérification de l’image
