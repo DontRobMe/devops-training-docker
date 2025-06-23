@@ -74,7 +74,7 @@ $ git commit --allow-empty -m "Étape 3.f : Relance du container sans volume, ut
 
 ```Dockerfile
 FROM nginx:latest
-COPY ./html/index.html /usr/share/nginx/html/index.html
+COPY ../html/index.html /usr/share/nginx/html/index.html
 ```
 
 ```bash
