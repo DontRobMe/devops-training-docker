@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "@heroui/react": "^2.7.9",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.6"
+  }
+}

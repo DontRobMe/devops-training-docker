@@ -1,0 +1,145 @@
+name: 🛠️ CI Full-Stack
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    branches: ['**']
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend:  ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: 🧾 Checkout
+        uses: actions/checkout@v3
+
+      - name: 🔍 Path Filter
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'docker-compose.yml'
+            frontend:
+              - 'frontend/**'
+
+  check-backend:
+    name: 🔧 Test Backend & Intégration
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: always()
+    services:
+      db:
+        image: postgres:17.4
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+          POSTGRES_DB: app_db
+        options: >-
+          --health-cmd "pg_isready -U admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: 🧾 Checkout
+        uses: actions/checkout@v3
+
+      - name: ⚠️ Skip if no backend changes
+        if: ${{ needs.detect-changes.outputs.backend == 'false' }}
+        run: |
+          echo "✅ Pas de changements backend → skip tests"
+          exit 0
+
+      - name: 🔐 Docker Login
+        if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🔄 Pull base image cache
+        if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+        run: |
+          docker pull ghcr.io/mon-org/mon-backend-base:latest || true
+
+      - name: ⚙️ Setup Docker Compose
+        if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+        uses: docker/setup-compose-action@v1
+        with:
+          version: latest
+
+      - name: 🚀 Start Backend & DB + healthcheck
+        if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+        run: |
+          docker compose up -d --wait db backend
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/api/health; then
+              echo "✅ Backend opérationnel" && exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ Healthcheck échoué" && exit 1
+
+      - name: 🧼 Teardown
+        if: always()
+        run: docker compose down -v
+
+  check-frontend:
+    name: 🏗️ Test & Build Frontend
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: always()
+    steps:
+      - name: 🧾 Checkout
+        uses: actions/checkout@v3
+
+      - name: ⚠️ Skip if no frontend changes
+        if: ${{ needs.detect-changes.outputs.frontend == 'false' }}
+        run: |
+          echo "✅ Pas de changements frontend → skip build"
+          exit 0
+
+      - name: 📦 Cache pnpm store
+        if: ${{ needs.detect-changes.outputs.frontend == 'true' }}
+        uses: actions/cache@v3
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: 👷 Setup Node.js LTS
+        if: ${{ needs.detect-changes.outputs.frontend == 'true' }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: 'lts/*'
+
+      - name: 🤖 Installer PNPM
+        if: ${{ needs.detect-changes.outputs.frontend == 'true' }}
+        working-directory: frontend
+        run: |
+          npm install -g pnpm
+
+      - name: 📥 Install & Build
+        if: ${{ needs.detect-changes.outputs.frontend == 'true' }}
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: ✅ Build Frontend terminé
+        run: echo "🚀 Frontend ready !"

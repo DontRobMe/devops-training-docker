@@ -1,0 +1,6 @@
+node_modules
+internal
+internal/*
+.env
+package-lock.json
+pgdata/
